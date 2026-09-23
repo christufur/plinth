@@ -1,4 +1,13 @@
 use std::path::{Path, PathBuf};
+mod player;
+use std::sync::{mpsc::Sender, Mutex};
+use tauri::{Manager, State};
+
+struct Audio(Mutex<Sender<player::Cmd>>);
+
+fn send(a: &State<Audio>, c: player::Cmd) {
+    let _ = a.0.lock().unwrap().send(c);
+}
 
 const AUDIO_EXT: &[&str] = &["mp3", "flac", "wav", "ogg", "aac", "m4a"];
 
@@ -26,12 +35,25 @@ fn scan_folder(path: String) -> Vec<String> {
     out.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()
 }
 
+#[tauri::command] fn play(path: String, a: State<Audio>) { send(&a, player::Cmd::Play(path)) }
+#[tauri::command] fn pause(a: State<Audio>) { send(&a, player::Cmd::Pause) }
+#[tauri::command] fn resume(a: State<Audio>) { send(&a, player::Cmd::Resume) }
+#[tauri::command] fn stop(a: State<Audio>) { send(&a, player::Cmd::Stop) }
+#[tauri::command] fn seek(secs: f64, a: State<Audio>) { send(&a, player::Cmd::Seek(secs)) }
+#[tauri::command] fn set_volume(vol: f32, a: State<Audio>) { send(&a, player::Cmd::Volume(vol)) }
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![scan_folder])
+        .setup(|app| {
+            app.manage(Audio(Mutex::new(player::spawn(app.handle().clone()))));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            scan_folder, play, pause, resume, stop, seek, set_volume
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
