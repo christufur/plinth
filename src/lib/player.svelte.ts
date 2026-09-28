@@ -24,7 +24,10 @@ listen("track_ended", () => {
 
 export const play = (path: string) => invoke("play", { path });
 export const toggle = () => invoke(player.state === "playing" ? "pause" : "resume");
-export const seek = (secs: number) => invoke("seek", { secs });
+export const seek = (secs: number) => {
+  player.pos = Math.max(0, secs); // optimistic; Rust confirms on next tick
+  return invoke("seek", { secs });
+};
 export const setVolume = (vol: number) => {
   player.volume = vol;
   invoke("set_volume", { vol });

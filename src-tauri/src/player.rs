@@ -19,7 +19,7 @@ pub fn spawn(app: AppHandle) -> Sender<Cmd> {
         let mut duration = 0.0;
         let mut was_playing = false;
         loop {
-            match rx.recv_timeout(Duration::from_millis(250)) {
+            match rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(Cmd::Play(path)) => {
                     let Ok(file) = std::fs::File::open(&path) else {continue};
                     let Ok(src) = rodio::Decoder::try_from(file) else {continue};
@@ -33,14 +33,17 @@ pub fn spawn(app: AppHandle) -> Sender<Cmd> {
                 Ok(Cmd::Pause) => { player.pause(); let _ = app.emit("state_changed", "paused"); }
                 Ok(Cmd::Resume) => { player.play(); let _ = app.emit("state_changed", "playing"); }
                 Ok(Cmd::Stop) => { player.clear(); let _ = app.emit("state_changed", "stopped"); }
-                Ok(Cmd::Seek(s)) => { let _ = player.try_seek(Duration::from_secs_f64(s)); }
+                Ok(Cmd::Seek(s)) => {
+                    let max = if duration > 0.0 { duration } else { f64::INFINITY };
+                    let _ = player.try_seek(Duration::from_secs_f64(s.clamp(0.0, max)));
+                }
                 Ok(Cmd::Volume(v)) => player.set_volume(v.clamp(0.0, 1.0)),
                 Err(mpsc::RecvTimeoutError::Disconnected) => return,
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
             }
             // tick
             let playing = !player.empty() && !player.is_paused();
-            if playing {
+            if !player.empty() {
                 let _ = app.emit("position", (player.get_pos().as_secs_f64(), duration));
             }
             if was_playing && player.empty() {
