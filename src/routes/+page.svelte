@@ -11,6 +11,12 @@
   let shownPos = $derived(scrubbing ? scrubPos : player.pos);
   let idx = $derived(tracks.indexOf(player.track ?? ""));
 
+  let url = $state("");
+  let downloading = $state(false);
+  let dlError = $state<string | null>(null);
+
+  const name = (p: string) => p.split(/[\\/]/).pop();
+
   const keys: Record<string, () => void> = {
     " ": toggle,
     ArrowLeft: () => seek(player.pos - 5),
@@ -51,18 +57,59 @@
   listen("track_ended", next);
   const saved = localStorage.getItem("folder");
   if (saved) load(saved);
+
+  async function download() {
+    const link = url.trim();
+    if (!link || downloading) return;
+    downloading = true;
+    dlError = null;
+    try {
+      const path = await invoke<string>("download_audio", { url: link });
+      if (!tracks.includes(path)) tracks = [path, ...tracks];
+      url = "";
+      await play(path);
+    } catch (e) {
+      dlError = String(e); // the Rust command returns Err(String)
+    } finally {
+      downloading = false;
+    }
+  }
 </script>
 
 <svelte:window onkeydown={onkey} />
 
 <main>
+  <form
+    class="download"
+    onsubmit={(e) => {
+      e.preventDefault();
+      download();
+    }}
+  >
+    <input
+      type="url"
+      placeholder="Paste a YouTube URL"
+      bind:value={url}
+      disabled={downloading}
+    />
+    <button type="submit" disabled={downloading || !url.trim()}>
+      {downloading ? "Downloading…" : "Download audio"}
+    </button>
+  </form>
+  {#if downloading}
+    <p>Fetching audio… the first download also installs yt-dlp and ffmpeg, so it can take a while.</p>
+  {/if}
+  {#if dlError}
+    <p class="error">{dlError}</p>
+  {/if}
+
   <button onclick={pick}>{folder ? "Change folder" : "Open folder"}</button>
-  {#if folder}
-    <p>{folder} — {tracks.length} tracks</p>
+  {#if tracks.length}
+    <p>{folder ? `${folder} — ` : ""}{tracks.length} tracks</p>
     <ul>
       {#each tracks as t (t)}
         <li class:active={t === player.track}>
-          <button onclick={() => play(t)}>{t.split("/").pop()}</button>
+          <button onclick={() => play(t)}>{name(t)}</button>
         </li>
       {/each}
     </ul>
@@ -75,7 +122,7 @@
     {player.state === "playing" ? "⏸" : "▶"}
   </button>
   <button onclick={next} disabled={idx < 0 || idx >= tracks.length - 1}>⏭</button>
-  <span class="title">{player.track?.split("/").pop() ?? "—"}</span>
+  <span class="title">{player.track ? name(player.track) : "—"}</span>
   <input
     type="range"
     min="0"
@@ -111,6 +158,17 @@
   main {
     padding: 2rem;
     padding-bottom: 5rem;
+  }
+  .download {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .download input {
+    flex: 1;
+  }
+  .error {
+    color: crimson;
   }
   ul {
     list-style: none;
