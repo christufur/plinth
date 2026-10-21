@@ -10,6 +10,7 @@
   --accent: #6366f1;
   --line: light-dark(#0001, #fff1);
   --r: 6px;
+  --bar-h: 9rem; /* player bar: fixed so it can't jump, and the page leaves room for it */
 }
 body {
   margin: 0;

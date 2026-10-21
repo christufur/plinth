@@ -223,7 +223,7 @@
   .body {
     display: grid;
     grid-template-columns: 180px 1fr;
-    height: calc(100vh - 4rem);
+    height: calc(100vh - var(--bar-h));
   }
   aside {
     border-right: 1px solid GrayText;
