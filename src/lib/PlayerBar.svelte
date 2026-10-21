@@ -6,6 +6,7 @@
   import CirclePause from "@lucide/svelte/icons/circle-pause";
   import Shuffle from "@lucide/svelte/icons/shuffle";
   import Heart from "@lucide/svelte/icons/heart";
+  import ImageIcon from "@lucide/svelte/icons/image";
   import { player, toggle, seek, setVolume, next, prev, queueIdx, toggleShuffle, fmt } from "$lib/player.svelte";
   import { library } from "$lib/library.svelte";
   import { isFavorite, toggleFavorite } from "$lib/playlists.svelte";
@@ -54,7 +55,10 @@
     disabled={!player.track}
     onclick={() => player.track && toggleFavorite(player.track)}><Heart size={20} fill={fav ? "currentColor" : "none"} /></button
   >
-  {#if cover}<img class="cover" src={cover} alt="" />{/if}
+  <!-- same size with or without art, so the bar keeps its height while a cover loads -->
+  <div class="cover">
+    {#if cover}<img src={cover} alt="" />{:else}<ImageIcon size={40} strokeWidth={1.5} />{/if}
+  </div>
   <div class="title" bind:clientWidth={titleW}>
     <div class = "marquee" class:scrolling={overflow}>
       <span bind:clientWidth={textW}>{current?.title ?? "—"}</span>
@@ -99,16 +103,25 @@
     display: flex;
     gap: 1rem;
     align-items: center;
-    padding: 2rem 2rem;
+    box-sizing: border-box;
+    height: var(--bar-h);
+    padding: 0 2rem;
     background: Canvas;
     border-top: 1px solid GrayText;
   }
   .cover {
     width: 5rem;
     height: 5rem;
-    object-fit: cover;
-    border-radius: 4px;
     flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .play {
     width: 3rem;
