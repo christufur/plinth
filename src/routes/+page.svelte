@@ -114,7 +114,7 @@
           {:else}
             <span class="cell">{k}</span>
           {/if}
-          <span class="n">{n}</span>
+          <span class="n">{n.length}</span>
         </button>
       {:else}
         <p><em>None found.</em></p>
