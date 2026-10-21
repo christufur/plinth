@@ -25,6 +25,30 @@ button {
   outline-offset: 2px;
 }
 
+/* round icon button (Lucide icons), shared by PlayerBar and QueuePopover */
+.icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.icon:hover:not(:disabled) {
+  background: var(--line);
+}
+.icon:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.icon.on {
+  color: var(--accent); /* shuffle / favorite while on */
+}
+
 /* list tables, shared by +page.svelte and TrackTable.svelte */
 .n {
   font-family: ui-monospace, monospace;

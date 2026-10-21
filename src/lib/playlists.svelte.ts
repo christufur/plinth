@@ -44,6 +44,25 @@ export function add(name = `New playlist ${playlists.playlists.length + 1}`): st
   return id;
 }
 
+const FAVORITES = "favorites"; // fixed id, so the heart always finds the same playlist
+
+export const isFavorite = (path: string | null) =>
+  !!path && !!playlists.playlists.find((p) => p.id === FAVORITES)?.tracks.includes(path);
+
+// the heart in the player bar; makes the Favorites playlist the first time (or again if deleted)
+export function toggleFavorite(path: string) {
+  if (!loaded) return;
+  if (!playlists.playlists.some((p) => p.id === FAVORITES)) {
+    playlists.playlists.push({ id: FAVORITES, name: "Favorites", tracks: [path] });
+    save();
+    return;
+  }
+  edit(FAVORITES, (p) => ({
+    ...p,
+    tracks: p.tracks.includes(path) ? p.tracks.filter((t) => t !== path) : [...p.tracks, path],
+  }));
+}
+
 export function remove(id: string) {
   if (!loaded) return;
   playlists.playlists = playlists.playlists.filter((p) => p.id !== id);

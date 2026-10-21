@@ -1,13 +1,21 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { player, toggle, seek, setVolume, next, prev, queueIdx, fmt } from "$lib/player.svelte";
+  import SkipBack from "@lucide/svelte/icons/skip-back";
+  import SkipForward from "@lucide/svelte/icons/skip-forward";
+  import CirclePlay from "@lucide/svelte/icons/circle-play";
+  import CirclePause from "@lucide/svelte/icons/circle-pause";
+  import Shuffle from "@lucide/svelte/icons/shuffle";
+  import Heart from "@lucide/svelte/icons/heart";
+  import { player, toggle, seek, setVolume, next, prev, queueIdx, toggleShuffle, fmt } from "$lib/player.svelte";
   import { library } from "$lib/library.svelte";
+  import { isFavorite, toggleFavorite } from "$lib/playlists.svelte";
 
   let scrubbing = $state(false);
   let scrubPos = $state(0);
   let shownPos = $derived(scrubbing ? scrubPos : player.pos);
   let idx = $derived(queueIdx());
   let current = $derived(library.tracks.find((t) => t.path === player.track));
+  let fav = $derived(isFavorite(player.track));
 
   // reactive variables for marquee animation
   let titleW = $state(0);
@@ -30,12 +38,21 @@
 </script>
 
 <footer>
-  <button onclick={prev} disabled={idx <= 0}>⏮</button>
-  <button onclick={toggle} disabled={!player.track}>
-    {player.state === "playing" ? "⏸" : "▶"}
+  <button class="icon" aria-label="Previous" onclick={prev} disabled={idx <= 0}><SkipBack size={24} /></button>
+  <button class="icon play" aria-label={player.state === "playing" ? "Pause" : "Play"} onclick={toggle} disabled={!player.track}>
+    {#if player.state === "playing"}<CirclePause size={36} />{:else}<CirclePlay size={36} />{/if}
   </button>
-  <button onclick={next} disabled={idx < 0 || idx >= player.queue.length - 1}
-    >⏭</button
+  <button class="icon" aria-label="Next" onclick={next} disabled={idx < 0 || idx >= player.queue.length - 1}><SkipForward size={24} /></button>
+  <button class="icon" class:on={player.shuffle} aria-pressed={player.shuffle} aria-label="Shuffle" onclick={toggleShuffle}>
+    <Shuffle size={20} />
+  </button>
+  <button
+    class="icon"
+    class:on={fav}
+    aria-pressed={fav}
+    aria-label="Favorite"
+    disabled={!player.track}
+    onclick={() => player.track && toggleFavorite(player.track)}><Heart size={20} fill={fav ? "currentColor" : "none"} /></button
   >
   {#if cover}<img class="cover" src={cover} alt="" />{/if}
   <div class="title" bind:clientWidth={titleW}>
@@ -93,11 +110,10 @@
     border-radius: 4px;
     flex: none;
   }
-  button {
-    width: 2.5rem;
-    height: 2.5rem;
-    font-size: 1.5rem;
-  } 
+  .play {
+    width: 3rem;
+    height: 3rem;
+  }
   .title {
     flex: 0 0 12rem;
     overflow: hidden;
