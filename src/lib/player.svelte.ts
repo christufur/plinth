@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { shuffleAfter } from "$lib/queue";
 
 type PlayState = "playing" | "paused" | "stopped";
 
@@ -10,7 +11,10 @@ export const player = $state({
   duration: 0,
   volume: 1,
   queue: [] as string[], // paths of the list the track was played from; next/prev walk this, not the current view
+  shuffle: false,
 });
+
+let ordered: string[] = []; // the queue before shuffling, restored when shuffle turns off
 
 listen<string>("track_changed", (e) => {
   player.track = e.payload;
@@ -25,10 +29,24 @@ listen("track_ended", () => {
 });
 
 export const play = (path: string, queue?: string[]) => {
-  if (queue) player.queue = queue;
+  if (queue) {
+    ordered = queue;
+    // shuffle on: the clicked track plays first, the rest in random order
+    const i = queue.indexOf(path);
+    player.queue = player.shuffle ? shuffleAfter([path, ...queue.slice(0, i), ...queue.slice(i + 1)], 0) : queue;
+  }
   return invoke("play", { path });
 };
 export const queueIdx = () => player.queue.indexOf(player.track ?? "");
+export function toggleShuffle() {
+  player.shuffle = !player.shuffle;
+  if (player.shuffle) {
+    ordered = player.queue;
+    player.queue = shuffleAfter(player.queue, queueIdx()); // only what comes after the current track
+  } else {
+    player.queue = ordered; // next/prev find the current track again by path
+  }
+}
 export const next = () => {
   const i = queueIdx();
   if (i >= 0 && i < player.queue.length - 1) play(player.queue[i + 1]);
