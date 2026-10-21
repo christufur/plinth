@@ -16,6 +16,9 @@
   } = $props();
 
   let paths = $derived(tracks.map((t) => t.path));
+  // a right-click (or ctrl-click) can also fire a click, which played the song;
+  // skip clicks until the next real pointer press or key press
+  let menued = false;
 </script>
 
 <div class="row head" class:handles={onmove}>
@@ -30,8 +33,11 @@
     <button
       class="row"
       class:active={t.path === player.track}
-      onclick={() => play(t.path, paths)}
+      onpointerdown={(e) => (menued = e.button !== 0 || e.ctrlKey)}
+      onkeydown={() => (menued = false)}
+      onclick={() => !menued && play(t.path, paths)}
       oncontextmenu={(e) => {
+        menued = true;
         if (!onmenu) return;
         e.preventDefault();
         onmenu(t, i);
