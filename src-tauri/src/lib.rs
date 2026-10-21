@@ -315,6 +315,51 @@ fn find_cover(path: &Path) -> Option<String> {
     None
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+struct Playlist {
+    id: String,
+    name: String,
+    tracks: Vec<String>,
+}
+
+// missing file = first run = return no playlists; a damaged file is
+//an error so a save can't overwrite it
+fn read_playlists(path: &Path) -> Result<Vec<Playlist>, String> {
+    match std::fs::read(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(format!("Failed to read playlists.json: {e}")),
+        Ok(b) => serde_json::from_slice(&b).map_err(|e| format!("Failed to parse playlists.json: {e}")),
+    }
+}
+
+//write a .tmp file then rename, so in case of a crash, it can't leave
+//half a file on disk
+fn write_playlists(path: &Path, playlists: &[Playlist]) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let bytes = serde_json::to_vec(playlists).map_err(|e| e.to_string())?;
+    std::fs::write(&tmp, bytes).map_err(|e| format!("Failed to write playlists.json.tmp: {e}"))?;
+    std::fs::rename(tmp, path).map_err(|e| format!("Failed to rename playlists.json.tmp to playlists.json: {e}"))
+}
+
+fn playlists_file(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("playlists.json"))
+}
+
+//load playlists.json from the app data directory
+#[tauri::command]
+fn load_playlists(app: AppHandle) -> Result<Vec<Playlist>, String> {
+    read_playlists(&playlists_file(&app)?)
+}
+
+//save playlists.json to the app data directory
+#[tauri::command]
+fn save_playlists(app: AppHandle, playlists: Vec<Playlist>) -> Result<(), String> {
+   write_playlists(&playlists_file(&app)?, &playlists)
+}
+
 #[tauri::command]
 fn play(path: String, a: State<Audio>) {
     send(&a, player::Cmd::Play(path))
@@ -363,7 +408,9 @@ pub fn run() {
             stop,
             seek,
             set_volume,
-            download_audio
+            download_audio,
+            load_playlists,
+            save_playlists
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -490,5 +537,22 @@ mod tests {
         std::fs::write(&p, b"not audio").unwrap();
         let t = read_track(&p);
         assert_eq!((t.title.as_str(), t.track_no, t.secs), ("Broke Boi", Some(8), 0.0));
+    }
+
+    #[test]
+    fn playlists_round_trip() {
+        let dir = std::env::temp_dir().join("plinth_playlists_round_trip");
+        let _ = std::fs::remove_dir_all(&dir);
+        let p = dir.join("playlists.json"); // dir doesn't exist yet: write must create it
+        assert_eq!(read_playlists(&p).unwrap(), vec![]); // missing file = empty
+        let want = vec![Playlist {
+            id: "1".into(),
+            name: "Late Night Study".into(),
+            tracks: vec!["a.mp3".into(), "a.mp3".into()], // duplicates are allowed
+        }];
+        write_playlists(&p, &want).unwrap();
+        assert_eq!(read_playlists(&p).unwrap(), want);
+        std::fs::write(&p, b"not json").unwrap();
+        assert!(read_playlists(&p).is_err()); // damaged file must not read as empty
     }
 }
