@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { player, toggle, seek, setVolume, next, prev, queueIdx, fmt } from "$lib/player.svelte";
-  import { library } from "$lib/library.svelte";
+  import { library, artistOf } from "$lib/library.svelte";
 
   let scrubbing = $state(false);
   let scrubPos = $state(0);
@@ -37,17 +37,19 @@
   <button onclick={next} disabled={idx < 0 || idx >= player.queue.length - 1}
     >⏭</button
   >
-  {#if cover}<img class="cover" src={cover} alt="" />{/if}
+  {#if cover}<img class="cover" src={cover} alt="" />{:else}<div class="cover empty" aria-hidden="true">♪</div>{/if}
   <div class="title" bind:clientWidth={titleW}>
     <div class = "marquee" class:scrolling={overflow}>
-      <span bind:clientWidth={textW}>{current?.title ?? "—"}</span>
+      <span bind:clientWidth={textW}>{current?.title ?? "Nothing playing"}</span>
       {#if overflow}
-        <span aria-hidden="true">{current?.title ?? "—"}</span>
+        <span aria-hidden="true">{current?.title ?? "Nothing playing"}</span>
       {/if}
     </div>
+    <div class="artist">{current ? (current.artist ?? artistOf(current)) : ""}</div>
   </div>
   <input
     type="range"
+    aria-label="Seek"
     min="0"
     max={player.duration}
     step="0.5"
@@ -62,9 +64,12 @@
       scrubbing = false;
     }}
   />
-  <span>{fmt(shownPos)} / {fmt(player.duration)}</span>
+  <span class="time">{fmt(shownPos)} / {fmt(player.duration)}</span>
+  <span class="n">Vol</span>
   <input
     type="range"
+    aria-label="Volume"
+    class="volume"
     min="0"
     max="1"
     step="0.01"
@@ -92,6 +97,32 @@
     object-fit: cover;
     border-radius: 4px;
     flex: none;
+  }
+  /* same box when a song has no cover, so the title doesn't jump sideways */
+  .cover.empty {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    background: var(--line);
+    font-size: 2rem;
+    opacity: 0.6;
+  }
+  .title > .marquee {
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+  .artist {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.7;
+  }
+  .time {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .volume {
+    width: 7rem;
   }
   button {
     width: 2.5rem;

@@ -45,6 +45,14 @@
   });
   const tracksOf = (p: Playlist) => p.tracks.map((path) => byPath.get(path) ?? missing(path));
   const totalSecs = (ts: Track[]) => ts.reduce((s, t) => s + t.secs, 0);
+  const count = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  // header line under a list title, like "2 albums • 10 tracks • 38:12"
+  const summary = (ts: Track[]) => {
+    const albumCount = new Set(ts.map(albumKey).filter(Boolean)).size;
+    return [albumCount ? count(albumCount, "album") : null, count(ts.length, "track"), fmt(totalSecs(ts))]
+      .filter(Boolean)
+      .join(" • ");
+  };
   let pl = $derived(sel?.kind === "playlist" ? playlists.playlists.find((p) => p.id === sel!.v) : undefined);
   let plTracks = $derived(pl ? tracksOf(pl) : []);
 
@@ -106,7 +114,7 @@
 <div class="body">
   <aside>
     {#each nav as [v, n]}
-      <button class:active={view === v} onclick={() => go(v)}>
+      <button class="nav" class:active={view === v} onclick={() => go(v)}>
         <span>{v}</span><span class="n">{n}</span>
       </button>
     {/each}
@@ -136,9 +144,13 @@
     <Download open={showURL} />
 
     {#if view === "tracks"}
-      {#if sel}
-        <p>{label(sel.v)} <button onclick={() => (sel = null)}>×</button></p>
-      {/if}
+      <div class="band">
+        <h2>{sel ? label(sel.v) : "All tracks"}</h2>
+        <span class="n">{summary(visible)}</span>
+        {#if sel}
+          <span class="actions"><button onclick={() => (sel = null)} aria-label="Show all tracks">×</button></span>
+        {/if}
+      </div>
       <TrackTable
         tracks={visible}
         empty={library.folder ? "No audio files found." : "Open a folder to start."}
@@ -177,6 +189,10 @@
         onmove={(from, to) => moveTrack(id, from, to)}
       />
     {:else if view === "playlists"}
+      <div class="band">
+        <h2>Playlists</h2>
+        <span class="n">{count(playlists.playlists.length, "playlist")}</span>
+      </div>
       <div class="row head" style:--cols="2.5rem 1fr 4rem 4rem">
         <span>#</span><span>Playlist</span><span>Tracks</span><span>Time</span>
       </div>
@@ -193,6 +209,10 @@
     {:else}
       {@const kind = view as "artists" | "albums"}
       {@const items = kind === "artists" ? artists : albums}
+      <div class="band">
+        <h2>{kind === "artists" ? "Artists" : "Albums"}</h2>
+        <span class="n">{count(items.length, kind === "artists" ? "artist" : "album")}</span>
+      </div>
       <div class="row head" style:--cols={kind === "artists" ? "2.5rem 1fr 4rem" : "2.5rem 3fr 2fr 4rem"}>
         <span>#</span>
         <span>{kind === "artists" ? "Artist" : "Album"}</span>
@@ -249,6 +269,22 @@
     background: var(--accent);
     color: #fff;
   }
+  /* library sections as boxed buttons with the count on the right, as in the wireframe */
+  aside .nav {
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    border: 1px solid var(--line);
+    font-weight: 600;
+  }
+  aside .nav:hover:not(.active) {
+    background: var(--line);
+  }
+  aside .nav.active {
+    border-color: var(--accent);
+  }
+  aside .nav.active .n {
+    opacity: 0.9;
+  }
   .playlists-head {
     display: flex;
     justify-content: space-between;
@@ -277,14 +313,19 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* title band over every list: name, then a short summary */
   .band {
     display: flex;
     align-items: baseline;
     gap: 1rem;
     margin-bottom: 0.75rem;
+    padding: 10px 14px;
+    border-radius: var(--r);
+    background: var(--line);
   }
   .band h2 {
     margin: 0;
+    font-size: 1.5rem;
   }
   .actions {
     margin-left: auto;
