@@ -10,6 +10,20 @@
 
   let showURL = $state(false);
 
+  // light/dark switch in the top-right corner; until the user picks one, the system setting decides.
+  // app.css colors use light-dark(), which follows color-scheme on the root element
+  type Theme = "light" | "dark";
+  let theme = $state<Theme>(
+    (localStorage.getItem("theme") as Theme | null) ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
+  );
+  $effect(() => {
+    document.documentElement.style.colorScheme = theme;
+  });
+  function toggleTheme() {
+    theme = theme === "dark" ? "light" : "dark";
+    localStorage.setItem("theme", theme);
+  }
+
   type View = "artists" | "albums" | "tracks" | "playlists";
   let view = $state<View>("tracks");
   let sel = $state<{ kind: "artists" | "albums" | "playlist"; v: string } | null>(null);
@@ -140,6 +154,14 @@
       <span class="n path">{library.folder ?? "No folder"}</span>
       <button onclick={pick}>{library.folder ? "Change folder" : "Open folder"}</button>
       <button onclick={() => (showURL = !showURL)}>＋ URL</button>
+      <button
+        class="theme"
+        onclick={toggleTheme}
+        aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        {theme === "dark" ? "☀︎ Light" : "☾︎ Dark"}
+      </button>
     </div>
     <Download open={showURL} />
 
@@ -306,6 +328,9 @@
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 0.75rem;
+  }
+  .theme {
+    white-space: nowrap;
   }
   .path {
     flex: 1;
