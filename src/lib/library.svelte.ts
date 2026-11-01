@@ -54,3 +54,15 @@ export const group = (tracks: Track[], key: (t: Track) => string | null) => {
 export const matches = (tracks: Track[], query: string) => {
   return tracks.filter(t => t.title.toLowerCase().includes(query.toLowerCase()) || t.artist?.toLowerCase().includes(query.toLowerCase()) || t.album?.toLowerCase().includes(query.toLowerCase()));
 };
+
+//localecompare for text, numbers for year and time
+export const sortBy = (tracks: Track[], key: (t: Track) => string | number | null, dir: "asc" | "desc" = "asc") => {
+  const s = dir === "asc" ? 1 : -1;
+  return [...tracks].sort((a, b) => {
+    const x = key(a), y = key(b);
+    if (x === y) return 0;
+    if (x === null) return 1; // empty values last in both directions
+    if (y === null) return -1;
+    return s * (typeof x === "string" ? x.localeCompare(y as string) : x - (y as number));
+  });
+};
