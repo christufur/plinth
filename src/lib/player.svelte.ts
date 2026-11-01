@@ -92,7 +92,7 @@ export function play(path: string, context: string[], i = context.indexOf(path))
   return playAt(i);
 }
 
-export const contextLeft = () => Math.max(player.context.length - player.at - 1, 0);
+const contextLeft = () => Math.max(player.context.length - player.at - 1, 0);
 export const upcoming = () => player.queue.length + contextLeft();
 export const canPrev = () => player.history.length > 0;
 

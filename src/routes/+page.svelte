@@ -140,7 +140,7 @@
       searchEl.focus();
       return;
     }
-    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement).tagName === "INPUT") return; // leave ⌘M, ⌘R and the like to the system
     const fn = keys[e.key];
     if (fn) {
       e.preventDefault();

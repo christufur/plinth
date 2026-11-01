@@ -376,11 +376,6 @@ fn resume(a: State<Audio>) {
 }
 
 #[tauri::command]
-fn stop(a: State<Audio>) {
-    send(&a, player::Cmd::Stop)
-}
-
-#[tauri::command]
 fn seek(secs: f64, a: State<Audio>) {
     send(&a, player::Cmd::Seek(secs))
 }
@@ -489,7 +484,6 @@ pub fn run() {
             play,
             pause,
             resume,
-            stop,
             seek,
             set_volume,
             download_audio,
