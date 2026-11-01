@@ -1,5 +1,5 @@
 use std::{path::{Path, PathBuf}, sync::{mpsc::Sender, Mutex}};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt, BufReader}, process::Command};
 
 mod player;
@@ -390,6 +390,42 @@ fn set_volume(vol: f32, a: State<Audio>) {
     send(&a, player::Cmd::Volume(vol))
 }
 
+const POPOUT_W: f64 = 360.0;
+const POPOUT_H: f64 = 104.0;
+const POPOUT_MARGIN: f64 = 12.0;
+
+// async because building a window in a sync command deadlocks on Windows
+#[tauri::command]
+async fn open_popout(app: AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("popout") {
+        w.unminimize().map_err(|e| e.to_string())?;
+        w.show().map_err(|e| e.to_string())?;
+        return w.set_focus().map_err(|e| e.to_string());
+    }
+    let main = app.get_webview_window("main");
+    // resizes both ways, but the max height stays under the min width, so it is never a square
+    let mut popout = WebviewWindowBuilder::new(&app, "popout", WebviewUrl::App("popout".into()))
+        .title("Plinth Mini")
+        .inner_size(POPOUT_W, POPOUT_H)
+        .min_inner_size(280.0, POPOUT_H)
+        .max_inner_size(640.0, 200.0)
+        .always_on_top(true)
+        .visible_on_all_workspaces(true)
+        .decorations(false)
+        .maximizable(false);
+    // top right of the screen main is on, inside the menu bar and dock
+    if let Some(screen) = main.as_ref().and_then(|w| w.current_monitor().ok().flatten()) {
+        let (scale, area) = (screen.scale_factor(), screen.work_area());
+        let right = (area.position.x as f64 + area.size.width as f64) / scale;
+        popout = popout.position(right - POPOUT_W - POPOUT_MARGIN, area.position.y as f64 / scale + POPOUT_MARGIN);
+    }
+    popout.build().map_err(|e| e.to_string())?;
+    if let Some(main) = main {
+        main.hide().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -398,6 +434,15 @@ pub fn run() {
         .setup(|app| {
             app.manage(Audio(Mutex::new(player::spawn(app.handle().clone()))));
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // the popout hid main when it opened, so closing it must bring main back
+            if window.label() == "popout" && matches!(event, WindowEvent::Destroyed) {
+                if let Some(main) = window.app_handle().get_webview_window("main") {
+                    let _ = main.show();
+                    let _ = main.set_focus();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             scan_folder,
@@ -410,7 +455,8 @@ pub fn run() {
             set_volume,
             download_audio,
             load_playlists,
-            save_playlists
+            save_playlists,
+            open_popout
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

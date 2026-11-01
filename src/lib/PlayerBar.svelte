@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { invoke } from "@tauri-apps/api/core";
   import SkipBack from "@lucide/svelte/icons/skip-back";
   import SkipForward from "@lucide/svelte/icons/skip-forward";
   import Play from "@lucide/svelte/icons/play";
@@ -8,6 +9,7 @@
   import ImageIcon from "@lucide/svelte/icons/image";
   import ListMusic from "@lucide/svelte/icons/list-music";
   import Volume2 from "@lucide/svelte/icons/volume-2";
+  import PictureInPicture2 from "@lucide/svelte/icons/picture-in-picture-2";
   import { player, toggle, seek, setVolume, next, prev, upcoming, canPrev, toggleShuffle, fmt } from "$lib/player.svelte";
   import { library, coverOf } from "$lib/library.svelte";
   import { isFavorite, toggleFavorite } from "$lib/playlists.svelte";
@@ -73,17 +75,6 @@
   </div>
 
   <div class="center">
-    <div class="controls">
-      <span class="spacer"></span>
-      <button class="icon" aria-label="Previous" onclick={prev} disabled={!canPrev()}><SkipBack size={18} fill="currentColor" /></button>
-      <button class="play" aria-label={player.state === "playing" ? "Pause" : "Play"} onclick={toggle} disabled={!player.track}>
-        {#if player.state === "playing"}<Pause size={16} fill="currentColor" />{:else}<Play size={16} fill="currentColor" />{/if}
-      </button>
-      <button class="icon" aria-label="Next" onclick={next} disabled={upcoming() <= 0}><SkipForward size={18} fill="currentColor" /></button>
-      <button class="icon" class:on={player.shuffle} aria-pressed={player.shuffle} aria-label="Shuffle" onclick={toggleShuffle}>
-        <Shuffle size={16} />
-      </button>
-    </div>
     <div class="progress">
       <span class="time">{fmt(shownPos)}</span>
       <input
@@ -107,9 +98,21 @@
       />
       <span class="time">{fmt(player.duration)}</span>
     </div>
+    <div class="controls">
+      <span class="spacer"></span>
+      <button class="icon" aria-label="Previous" onclick={prev} disabled={!canPrev()}><SkipBack size={18} fill="currentColor" /></button>
+      <button class="play" aria-label={player.state === "playing" ? "Pause" : "Play"} onclick={toggle} disabled={!player.track}>
+        {#if player.state === "playing"}<Pause size={16} fill="currentColor" />{:else}<Play size={16} fill="currentColor" />{/if}
+      </button>
+      <button class="icon" aria-label="Next" onclick={next} disabled={upcoming() <= 0}><SkipForward size={18} fill="currentColor" /></button>
+      <button class="icon" class:on={player.shuffle} aria-pressed={player.shuffle} aria-label="Shuffle" onclick={toggleShuffle}>
+        <Shuffle size={16} />
+      </button>
+    </div>
   </div>
 
   <div class="side">
+    <button class="icon" aria-label="Open popout player" onclick={() => invoke("open_popout")}><PictureInPicture2 size={20} /></button>
     <div class="queue-box" bind:this={queueBox}>
       <button class="btn queue-btn" bind:this={queueBtn} aria-expanded={queueOpen} onclick={() => (queueOpen = !queueOpen)}
         ><ListMusic size={18} /> Queue · {upcoming()}</button
@@ -278,6 +281,12 @@
      margin, not padding, because clientWidth leaves margin out of the overflow check */
   .marquee.scrolling span {
     margin-right: 3rem;
+  }
+  /* the default window is 1000px wide: the title gets the room before the fixed-width centre does */
+  @media (max-width: 1200px) {
+    footer {
+      grid-template-columns: minmax(16rem, 1.4fr) minmax(12rem, 1fr) minmax(max-content, 1fr);
+    }
   }
   /* narrow windows (the app's minimum is 720px): a smaller cover leaves room for the title */
   @media (max-width: 900px) {

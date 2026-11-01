@@ -14,10 +14,13 @@
   import { player, play, toggle, seek, setVolume, next, prev, fmt } from "$lib/player.svelte";
   import { library, pick, artistOf, albumKey, group, matches, type Track } from "$lib/library.svelte";
   import { playlists, add, rename, remove, moveTrack, type Playlist } from "$lib/playlists.svelte";
+  import { syncPopout } from "$lib/popout.svelte";
   import { trackMenu } from "$lib/menu";
   import Download from "$lib/Download.svelte";
   import PlayerBar from "$lib/PlayerBar.svelte";
   import TrackTable from "$lib/TrackTable.svelte";
+
+  syncPopout();
 
   let showURL = $state(false);
   let query = $state("");

@@ -38,3 +38,6 @@ export function stepBack<T>(
   const a = fromQueue ? at : at - 1;
   return { at: a, queue: q, fromQueue: path !== context[a] };
 }
+
+export const fmt = (s: number) =>
+  `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
