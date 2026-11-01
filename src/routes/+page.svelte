@@ -11,7 +11,7 @@
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import Sun from "@lucide/svelte/icons/sun";
   import Moon from "@lucide/svelte/icons/moon";
-  import { player, play, toggle, seek, setVolume, next, prev, fmt } from "$lib/player.svelte";
+  import { player, play, toggle, seek, setVolume, next, prev, toggleMute, toggleShuffle, cycleRepeat, fmt } from "$lib/player.svelte";
   import { library, pick, artistOf, albumKey, group, matches, type Track } from "$lib/library.svelte";
   import { playlists, add, rename, remove, moveTrack, type Playlist } from "$lib/playlists.svelte";
   import { syncPopout } from "$lib/popout.svelte";
@@ -128,8 +128,11 @@
     ArrowRight: () => seek(player.pos + 5),
     ArrowUp: () => setVolume(Math.min(1, player.volume + 0.05)),
     ArrowDown: () => setVolume(Math.max(0, player.volume - 0.05)),
-    n: next,
+    n: () => next(),
     p: prev,
+    m: toggleMute,
+    s: toggleShuffle,
+    r: cycleRepeat,
   };
   function onkey(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === "f") {
@@ -354,7 +357,14 @@
   </main>
 </div>
 
-<PlayerBar />
+<PlayerBar
+  onopen={(t, kind) => {
+    const key = kind === "albums" ? albumKey(t) : artistOf(t);
+    if (!key) return;
+    query = "";
+    drill(kind, key);
+  }}
+/>
 
 <style>
   /* sidebar runs the full height; the toolbar and list share the column beside it */

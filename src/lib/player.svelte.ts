@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { moveItem, shuffleFrom, stepBack } from "$lib/queue";
+import { moveItem, nextStep, shuffleFrom, stepBack } from "$lib/queue";
 
 type PlayState = "playing" | "paused" | "stopped";
 
@@ -19,6 +19,7 @@ export const player = $state({
   fromQueue: false, // the playing track came from the queue, not from context[at]
   history: [] as string[], // tracks played before the current one, oldest first
   shuffle: false,
+  repeat: (localStorage.getItem("repeat") ?? "off") as "off" | "all" | "one",
   canUndo: false,
 });
 
@@ -54,7 +55,7 @@ listen<[number, number]>("position", (e) => ([player.pos, player.duration] = e.p
 listen("track_ended", () => {
   player.state = "stopped";
   player.pos = 0;
-  next();
+  next(true);
 });
 
 export const playAt = (i: number) => {
@@ -95,9 +96,17 @@ export const contextLeft = () => Math.max(player.context.length - player.at - 1,
 export const upcoming = () => player.queue.length + contextLeft();
 export const canPrev = () => player.history.length > 0;
 
-export function next() {
-  if (player.queue.length) playQueued(0);
-  else if (contextLeft()) playAt(player.at + 1);
+export function next(ended = false) {
+  const step = nextStep(player.queue.length, contextLeft(), player.repeat, ended, player.context.length > 0);
+  if (step === "same" && now) invoke("play", { path: now }); // no history: it is the same play going round
+  else if (step === "queue") playQueued(0);
+  else if (step === "list") playAt(player.at + 1);
+  else if (step === "wrap") playAt(0);
+}
+export const canNext = () => upcoming() > 0 || (player.repeat === "all" && player.context.length > 0);
+export function cycleRepeat() {
+  player.repeat = player.repeat === "off" ? "all" : player.repeat === "all" ? "one" : "off";
+  localStorage.setItem("repeat", player.repeat);
 }
 // shortcut: a track replayed from history also goes back into the queue; mark replays if that annoys anyone
 export function prev() {
@@ -167,7 +176,19 @@ export const seek = (secs: number) => {
 };
 export const setVolume = (vol: number) => {
   player.volume = vol;
+  localStorage.setItem("volume", String(vol));
   invoke("set_volume", { vol });
 };
 
 export { fmt } from "$lib/queue";
+
+// mute keeps the old level, so a second click restores it
+let unmuted = 1;
+export function toggleMute() {
+  if (player.volume > 0) {
+    unmuted = player.volume;
+    setVolume(0);
+  } else setVolume(unmuted);
+}
+const savedVolume = localStorage.getItem("volume");
+if (savedVolume !== null) setVolume(+savedVolume);

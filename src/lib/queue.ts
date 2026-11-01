@@ -41,3 +41,11 @@ export function stepBack<T>(
 
 export const fmt = (s: number) =>
   `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+// what plays next; `ended` means the track ran out, so repeat one only applies there, not to the next button
+export function nextStep(queued: number, left: number, repeat: "off" | "all" | "one", ended: boolean, hasList: boolean) {
+  if (ended && repeat === "one") return "same";
+  if (queued) return "queue";
+  if (left) return "list";
+  return repeat === "all" && hasList ? "wrap" : null;
+}

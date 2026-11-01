@@ -1,6 +1,6 @@
 // @ts-expect-error bun's built-in test module; run with `bun test src/lib` (no @types/bun installed)
 import { describe, expect, test } from "bun:test";
-import { moveItem, shuffleAfter, shuffleFrom, stepBack } from "./queue";
+import { moveItem, nextStep, shuffleAfter, shuffleFrom, stepBack } from "./queue";
 
 test("moveItem keeps the playing track current", () => {
   const q = ["a", "b", "c", "d", "e"]; // "c" playing, at = 2
@@ -58,5 +58,21 @@ describe("stepBack", () => {
   });
   test("first list track back to a track from another list", () => {
     expect(stepBack({ context, at: 0, queue: [], fromQueue: false }, "a", "old")).toEqual({ at: -1, queue: [], fromQueue: true });
+  });
+});
+
+describe("nextStep", () => {
+  test("repeat one replays only when the track ran out", () => {
+    expect(nextStep(1, 3, "one", true, true)).toBe("same");
+    expect(nextStep(0, 3, "one", false, true)).toBe("list");
+  });
+  test("the queue plays before the list", () => {
+    expect(nextStep(2, 3, "off", true, true)).toBe("queue");
+  });
+  test("the end of the list stops, or wraps with repeat all", () => {
+    expect(nextStep(0, 0, "off", true, true)).toBe(null);
+    expect(nextStep(0, 0, "all", true, true)).toBe("wrap");
+    expect(nextStep(0, 0, "all", true, false)).toBe(null);
+    expect(nextStep(0, 0, "one", false, true)).toBe(null);
   });
 });

@@ -390,6 +390,29 @@ fn set_volume(vol: f32, a: State<Audio>) {
     send(&a, player::Cmd::Volume(vol))
 }
 
+fn popout_frame_file(app: &AppHandle) -> Option<std::path::PathBuf> {
+    Some(app.path().app_data_dir().ok()?.join("popout-frame.txt"))
+}
+
+fn load_popout_frame(app: &AppHandle) -> Option<(f64, f64, f64, f64)> {
+    let text = std::fs::read_to_string(popout_frame_file(app)?).ok()?;
+    let n: Vec<f64> = text.split_whitespace().filter_map(|v| v.parse().ok()).collect();
+    (n.len() == 4).then(|| (n[0], n[1], n[2], n[3]))
+}
+
+// best effort: losing this only means the popout opens in its default spot
+fn save_popout_frame(window: &tauri::Window) {
+    let (Ok(pos), Ok(size), Ok(scale)) = (window.outer_position(), window.inner_size(), window.scale_factor()) else {
+        return;
+    };
+    let Some(file) = popout_frame_file(window.app_handle()) else { return };
+    let (pos, size) = (pos.to_logical::<f64>(scale), size.to_logical::<f64>(scale));
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(file, format!("{} {} {} {}", pos.x, pos.y, size.width, size.height));
+}
+
 const POPOUT_W: f64 = 360.0;
 const POPOUT_H: f64 = 104.0;
 const POPOUT_MARGIN: f64 = 12.0;
@@ -403,21 +426,34 @@ async fn open_popout(app: AppHandle) -> Result<(), String> {
         return w.set_focus().map_err(|e| e.to_string());
     }
     let main = app.get_webview_window("main");
-    // resizes both ways, but the max height stays under the min width, so it is never a square
+    // resizes both ways within these limits; it opens as a strip, and only a drag makes it tall
     let mut popout = WebviewWindowBuilder::new(&app, "popout", WebviewUrl::App("popout".into()))
         .title("Plinth Mini")
-        .inner_size(POPOUT_W, POPOUT_H)
-        .min_inner_size(280.0, POPOUT_H)
-        .max_inner_size(640.0, 200.0)
+        .min_inner_size(240.0, 56.0)
+        .max_inner_size(640.0, 480.0)
         .always_on_top(true)
         .visible_on_all_workspaces(true)
         .decorations(false)
         .maximizable(false);
-    // top right of the screen main is on, inside the menu bar and dock
-    if let Some(screen) = main.as_ref().and_then(|w| w.current_monitor().ok().flatten()) {
-        let (scale, area) = (screen.scale_factor(), screen.work_area());
-        let right = (area.position.x as f64 + area.size.width as f64) / scale;
-        popout = popout.position(right - POPOUT_W - POPOUT_MARGIN, area.position.y as f64 / scale + POPOUT_MARGIN);
+    let screens = app.available_monitors().unwrap_or_default();
+    // the last spot, unless the screen it was on has gone
+    let saved = load_popout_frame(&app).filter(|&(x, y, _, _)| {
+        screens.iter().any(|m| {
+            let (s, p, z) = (m.scale_factor(), m.position(), m.size());
+            let (left, top) = (p.x as f64 / s, p.y as f64 / s);
+            x >= left && y >= top && x < left + z.width as f64 / s && y < top + z.height as f64 / s
+        })
+    });
+    if let Some((x, y, w, h)) = saved {
+        popout = popout.position(x, y).inner_size(w, h);
+    } else {
+        popout = popout.inner_size(POPOUT_W, POPOUT_H);
+        // first run: top right of the screen main is on, inside the menu bar and dock
+        if let Some(screen) = main.as_ref().and_then(|w| w.current_monitor().ok().flatten()) {
+            let (scale, area) = (screen.scale_factor(), screen.work_area());
+            let right = (area.position.x as f64 + area.size.width as f64) / scale;
+            popout = popout.position(right - POPOUT_W - POPOUT_MARGIN, area.position.y as f64 / scale + POPOUT_MARGIN);
+        }
     }
     popout.build().map_err(|e| e.to_string())?;
     if let Some(main) = main {
@@ -436,6 +472,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() == "popout" && matches!(event, WindowEvent::CloseRequested { .. }) {
+                save_popout_frame(window);
+            }
             // the popout hid main when it opened, so closing it must bring main back
             if window.label() == "popout" && matches!(event, WindowEvent::Destroyed) {
                 if let Some(main) = window.app_handle().get_webview_window("main") {

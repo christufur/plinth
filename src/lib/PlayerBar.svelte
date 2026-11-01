@@ -9,13 +9,25 @@
   import ImageIcon from "@lucide/svelte/icons/image";
   import ListMusic from "@lucide/svelte/icons/list-music";
   import Volume2 from "@lucide/svelte/icons/volume-2";
+  import Volume1 from "@lucide/svelte/icons/volume-1";
+  import VolumeX from "@lucide/svelte/icons/volume-x";
+  import Repeat from "@lucide/svelte/icons/repeat";
+  import Repeat1 from "@lucide/svelte/icons/repeat-1";
   import PictureInPicture2 from "@lucide/svelte/icons/picture-in-picture-2";
-  import { player, toggle, seek, setVolume, next, prev, upcoming, canPrev, toggleShuffle, fmt } from "$lib/player.svelte";
-  import { library, coverOf } from "$lib/library.svelte";
+  import { player, toggle, seek, setVolume, next, prev, upcoming, canPrev, canNext, toggleShuffle, cycleRepeat, toggleMute, fmt } from "$lib/player.svelte";
+  import { library, coverOf, type Track } from "$lib/library.svelte";
   import { isFavorite, toggleFavorite } from "$lib/playlists.svelte";
   import QueuePopover from "$lib/QueuePopover.svelte";
 
+  let { onopen }: { onopen: (t: Track, kind: "albums" | "artists") => void } = $props();
+
   let scrubbing = $state(false);
+  let moved = false; // a press with no drag fires no change event, so it must end the scrub itself
+  let showLeft = $state(localStorage.getItem("timeLeft") === "1");
+  function toggleTimeLeft() {
+    showLeft = !showLeft;
+    localStorage.setItem("timeLeft", showLeft ? "1" : "0");
+  }
   let scrubPos = $state(0);
   let shownPos = $derived(scrubbing ? scrubPos : player.pos);
   let current = $derived(library.tracks.find((t) => t.path === player.track));
@@ -50,19 +62,19 @@
 <footer>
   <div class="now">
     <!-- same size with or without art, so the bar keeps its height while a cover loads -->
-    <div class="cover">
+    <button class="cover" aria-label="Open album" disabled={!current?.album} onclick={() => current && onopen(current, "albums")}>
       {#if cover}<img src={cover} alt="" />{:else}<ImageIcon size={32} strokeWidth={1.5} />{/if}
-    </div>
+    </button>
     <div class="meta">
-      <div class="title" bind:clientWidth={titleW}>
+      <button class="title" class:fade={overflow} title={current ? title : undefined} disabled={!current?.album} onclick={() => current && onopen(current, "albums")} bind:clientWidth={titleW}>
         <div class="marquee" class:scrolling={overflow}>
           <span bind:clientWidth={textW}>{title}</span>
           {#if overflow}
             <span aria-hidden="true">{title}</span>
           {/if}
         </div>
-      </div>
-      <div class="artist cell">{current?.artist ?? "No artist"}</div>
+      </button>
+      <button class="artist cell" disabled={!current} onclick={() => current && onopen(current, "artists")}>{current?.artist ?? "No artist"}</button>
     </div>
     <button
       class="icon"
@@ -76,11 +88,12 @@
 
   <div class="center">
     <div class="progress">
-      <span class="time">{fmt(shownPos)}</span>
+      <span class="time">{player.track ? fmt(shownPos) : "—:—"}</span>
       <input
         class="seek"
         type="range"
         aria-label="Position"
+        aria-valuetext="{fmt(shownPos)} of {fmt(player.duration)}"
         min="0"
         max={player.duration}
         step="0.5"
@@ -89,24 +102,37 @@
         onpointerdown={() => {
           scrubPos = player.pos;
           scrubbing = true;
+          moved = false;
         }}
-        oninput={(e) => (scrubPos = +e.currentTarget.value)}
+        onpointerup={() => {
+          if (!moved) scrubbing = false;
+        }}
+        oninput={(e) => {
+          scrubPos = +e.currentTarget.value;
+          moved = true;
+        }}
         onchange={(e) => {
           seek(+e.currentTarget.value);
           scrubbing = false;
         }}
       />
-      <span class="time">{fmt(player.duration)}</span>
+      <button class="time total" aria-label={showLeft ? "Show total time" : "Show time left"} disabled={!player.track} onclick={toggleTimeLeft}>
+        {#if !player.track}—:—{:else if showLeft}-{fmt(Math.max(0, player.duration - shownPos))}{:else}{fmt(player.duration)}{/if}
+      </button>
     </div>
     <div class="controls">
-      <span class="spacer"></span>
-      <button class="icon" aria-label="Previous" onclick={prev} disabled={!canPrev()}><SkipBack size={18} fill="currentColor" /></button>
-      <button class="play" aria-label={player.state === "playing" ? "Pause" : "Play"} onclick={toggle} disabled={!player.track}>
-        {#if player.state === "playing"}<Pause size={16} fill="currentColor" />{:else}<Play size={16} fill="currentColor" />{/if}
-      </button>
-      <button class="icon" aria-label="Next" onclick={next} disabled={upcoming() <= 0}><SkipForward size={18} fill="currentColor" /></button>
-      <button class="icon" class:on={player.shuffle} aria-pressed={player.shuffle} aria-label="Shuffle" onclick={toggleShuffle}>
+      <button class="icon end" class:on={player.shuffle} aria-pressed={player.shuffle} aria-label="Shuffle" onclick={toggleShuffle}>
         <Shuffle size={16} />
+      </button>
+      <div class="transport">
+        <button class="icon" aria-label="Previous" onclick={prev} disabled={!canPrev()}><SkipBack size={20} fill="currentColor" /></button>
+        <button class="play" aria-label={player.state === "playing" ? "Pause" : "Play"} onclick={toggle} disabled={!player.track}>
+          {#if player.state === "playing"}<Pause size={18} fill="currentColor" />{:else}<Play size={18} fill="currentColor" />{/if}
+        </button>
+        <button class="icon" aria-label="Next" onclick={() => next()} disabled={!canNext()}><SkipForward size={20} fill="currentColor" /></button>
+      </div>
+      <button class="icon end" class:on={player.repeat !== "off"} aria-label="Repeat: {player.repeat}" onclick={cycleRepeat}>
+        {#if player.repeat === "one"}<Repeat1 size={16} />{:else}<Repeat size={16} />{/if}
       </button>
     </div>
   </div>
@@ -119,10 +145,12 @@
       >
       {#if queueOpen}<QueuePopover onclose={closeQueue} />{/if}
     </div>
-    <label class="vol">
-      <Volume2 size={20} aria-hidden="true" />
+    <div class="vol">
+      <button class="icon" aria-label={player.volume ? "Mute" : "Unmute"} onclick={toggleMute}>
+        {#if !player.volume}<VolumeX size={20} />{:else if player.volume < 0.5}<Volume1 size={20} />{:else}<Volume2 size={20} />{/if}
+      </button>
       <input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} oninput={(e) => setVolume(+e.currentTarget.value)} />
-    </label>
+    </div>
   </div>
 </footer>
 
@@ -150,6 +178,9 @@
     min-width: 0;
   }
   .cover {
+    padding: 0;
+    border: none;
+    cursor: pointer;
     width: 80px;
     height: 80px;
     flex: none;
@@ -159,6 +190,9 @@
     overflow: hidden;
     background: var(--surface);
     color: var(--faint);
+  }
+  .cover:disabled {
+    cursor: default;
   }
   .cover img {
     width: 100%;
@@ -170,12 +204,32 @@
     max-width: 22rem;
   }
   .title {
+    all: unset;
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    cursor: pointer;
     overflow: hidden;
     white-space: nowrap;
     font-size: 17px;
     font-weight: 500;
   }
+  .title:disabled {
+    cursor: default;
+  }
+  /* soft edge shows the title runs on; hovering holds it still to read */
+  .title.fade {
+    mask-image: linear-gradient(90deg, #000 88%, transparent);
+  }
+  .title:hover .marquee {
+    animation-play-state: paused;
+  }
   .artist {
+    all: unset;
+    display: block;
+    box-sizing: border-box;
+    max-width: 100%;
+    cursor: pointer;
     margin-top: 4px;
     font-size: 14px;
     color: var(--muted);
@@ -184,24 +238,44 @@
     display: grid;
     gap: 10px;
   }
+  /* shuffle and repeat sit under the ends of the seek bar, so previous, play and next stay on the centre line */
   .controls {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding-inline: calc(2.5rem + 8px); /* the width of a time plus its gap */
+  }
+  .controls .end {
+    width: 32px;
+    height: 32px;
+    position: relative;
+  }
+  .controls .end:last-child {
+    justify-self: end;
+  }
+  .controls .end.on::after {
+    content: "";
+    position: absolute;
+    bottom: 2px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor; /* on means more than blue, so it reads without colour too */
+  }
+  .transport {
     display: flex;
-    justify-content: center;
     align-items: center;
     gap: 2px;
   }
-  .controls .icon {
-    width: 32px;
-    height: 32px;
-  }
-  .spacer {
-    width: 32px; /* balances the shuffle button so play sits on the centre line */
+  .transport .icon {
+    width: 36px;
+    height: 36px;
   }
   .play {
     display: grid;
     place-items: center;
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     margin: 0 6px;
     padding: 0;
     border: none;
@@ -230,6 +304,30 @@
   }
   .time:first-child {
     text-align: right;
+  }
+  .total {
+    all: unset;
+    flex: none;
+    min-width: 2.5rem;
+    font-size: var(--fs-small);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .total:disabled {
+    cursor: default;
+  }
+  .total:hover:not(:disabled),
+  .artist:hover:not(:disabled) {
+    color: var(--text);
+    text-decoration: underline;
+  }
+  .total:focus-visible,
+  .title:focus-visible,
+  .artist:focus-visible {
+    outline: 2px solid var(--accent);
+  }
+  .seek:disabled {
+    opacity: 0.4;
   }
   input[type="range"] {
     accent-color: var(--accent); /* the progress is data, so it carries the blue */
@@ -290,6 +388,12 @@
   }
   /* narrow windows (the app's minimum is 720px): a smaller cover leaves room for the title */
   @media (max-width: 900px) {
+    .side {
+      gap: 6px;
+    }
+    .queue-btn {
+      padding: 0 10px;
+    }
     .cover {
       width: 56px;
       height: 56px;
