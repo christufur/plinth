@@ -117,14 +117,20 @@ h3 {
   all: unset;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: var(--cols, 2.5rem 3fr 2fr 2fr 3.5rem 3.5rem);
+  grid-template-columns: var(--cols, 2.5rem 3fr 2fr 1.4fr 5rem 5rem);
   gap: 8px;
   align-items: center;
   width: 100%;
   min-height: 28px;
-  padding: 0 6px;
+  padding: 0 20px 0 6px; /* the right side leaves room for a sort arrow past the last column */
   border-radius: var(--radius-row);
   color: var(--muted);
+}
+/* narrow windows: the text columns need the room more than Year and Time do */
+@media (max-width: 900px) {
+  .row {
+    --cols: 2.5rem 3fr 2fr 2fr 3.5rem 3.5rem;
+  }
 }
 .row .id {
   color: var(--text); /* only the identity column gets the full ink */

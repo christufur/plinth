@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+<<<<<<< HEAD
 import { moveItem, nextStep, shuffleFrom, stepBack } from "$lib/queue";
+=======
+import { backStep, moveItem, shuffleFrom, stepBack, stepUp } from "$lib/queue";
+>>>>>>> feat/design
 
 type PlayState = "playing" | "paused" | "stopped";
 
@@ -25,6 +29,8 @@ export const player = $state({
 
 const HISTORY = 100; // shortcut: kept in memory only, cleared on restart; persist it if people ask
 let now: string | null = null; // set at once, before the track_changed event arrives
+let started = 0; // history length when the current list began; before this, previous walks the list instead
+let returned = 0; // how many tracks at the front of the queue got there by previous, not by being queued
 function start(path: string) {
   if (now) player.history = [...player.history, now].slice(-HISTORY);
   now = path;
@@ -72,6 +78,7 @@ export function replay(path: string) {
 export function playQueued(k: number) {
   const path = player.queue[k];
   player.queue = player.queue.slice(k + 1);
+  returned = Math.max(0, returned - k - 1);
   player.fromQueue = true;
   dropUndo(); // the queue moved on; an old snapshot would bring played tracks back
   return start(path);
@@ -85,16 +92,21 @@ export function play(path: string, context: string[], i = context.indexOf(path))
     // the clicked track plays first, the rest in random order
     ordered = context;
     player.context = shuffleFrom(context, i);
-    return playAt(0);
+    i = 0;
+  } else {
+    ordered = null;
+    player.context = context;
   }
-  ordered = null;
-  player.context = context;
-  return playAt(i);
+  const playing = playAt(i);
+  started = player.history.length;
+  returned = 0;
+  return playing;
 }
 
 const contextLeft = () => Math.max(player.context.length - player.at - 1, 0);
 export const upcoming = () => player.queue.length + contextLeft();
-export const canPrev = () => player.history.length > 0;
+const back = () => backStep(player.history.length, started, player.at, player.fromQueue);
+export const canPrev = () => back() !== null;
 
 export function next(ended = false) {
   const step = nextStep(player.queue.length, contextLeft(), player.repeat, ended, player.context.length > 0);
@@ -110,10 +122,25 @@ export function cycleRepeat() {
 }
 // shortcut: a track replayed from history also goes back into the queue; mark replays if that annoys anyone
 export function prev() {
-  const path = player.history.at(-1);
-  if (!path) return;
-  player.history = player.history.slice(0, -1);
-  if (now) Object.assign(player, stepBack(player, now, path));
+  const step = back();
+  if (!step) return;
+  let path: string;
+  if (step === "list") {
+    Object.assign(player, stepUp(player, returned));
+    returned = 0;
+    path = player.context[player.at];
+  } else {
+    if (player.fromQueue) returned++;
+    if (step === "current") {
+      path = player.context[player.at];
+      if (now) player.queue = [now, ...player.queue]; // a queued track stays ahead, so next plays it again
+      player.fromQueue = false;
+    } else {
+      path = player.history.at(-1)!;
+      player.history = player.history.slice(0, -1);
+      if (now) Object.assign(player, stepBack(player, now, path));
+    }
+  }
   dropUndo(); // the queue moved; an old snapshot would bring it back wrong
   now = path;
   return invoke("play", { path });
@@ -139,6 +166,7 @@ export function toggleShuffle() {
 export function playNext(paths: string[]) {
   if (!player.track) return void play(paths[0], paths, 0);
   snapshot();
+  returned = 0; // these go in front, so the returned tracks no longer sit at the head
   player.queue = [...paths, ...player.queue];
 }
 export function addToQueue(paths: string[]) {
@@ -148,6 +176,7 @@ export function addToQueue(paths: string[]) {
 }
 export function moveInQueue(from: number, to: number) {
   snapshot();
+  returned = 0;
   [player.queue] = moveItem(player.queue, -1, from, to);
 }
 // indexes are absolute positions in context; `at` follows the current track
@@ -158,11 +187,13 @@ export function moveInContext(from: number, to: number) {
 }
 export function clearQueue() {
   snapshot();
+  returned = 0;
   player.queue = [];
 }
 
 export function undoQueue() {
   if (!undo) return;
+  returned = 0;
   const current = player.context[player.at];
   ({ context: player.context, queue: player.queue, ordered, shuffle: player.shuffle } = undo);
   player.at = player.context.indexOf(current);

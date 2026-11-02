@@ -31,6 +31,10 @@
     volume: 1,
   });
   let volumeOpen = $state(false);
+  // the title scrolls only when it doesn't fit, as in the player bar
+  let titleW = $state(0);
+  let textW = $state(0);
+  let overflow = $derived(textW > titleW);
   const send = (cmd: string) => emit("popout_cmd", cmd);
   const close = () => getCurrentWindow().close(); // main comes back when this window goes
   let playState = $state("stopped");
@@ -73,7 +77,9 @@
 <svelte:window onstorage={applyTheme} />
 
 <!-- no title bar: the cover and empty areas drag the window, its edges and the grip resize it -->
-<main data-tauri-drag-region>
+<main class:tinted={cover} data-tauri-drag-region>
+  <!-- the blank part of the window takes the song's colour; dark, so the text reads on any art -->
+  {#if cover}<div class="backdrop" aria-hidden="true"><img src={cover} alt="" /></div>{/if}
   <div class="cover" data-tauri-drag-region>
     {#key cover}
       {#if cover}<img src={cover} alt="" />{:else}<ImageIcon size={24} strokeWidth={1.5} />{/if}
@@ -83,8 +89,13 @@
   <div class="panel" data-tauri-drag-region>
     <div class="info" data-tauri-drag-region>
       <div class="meta">
-        <button class="title cell" title={song.title} onclick={close}>{song.title || "Nothing Playing..."}</button>
-        <button class="artist cell" onclick={close}>{song.artist || "No artist"}</button>
+        <button class="title" class:fade={overflow} title={song.title} onclick={close} bind:clientWidth={titleW}>
+          <span class="marquee" class:scrolling={overflow}>
+            <span bind:clientWidth={textW}>{song.title || "Nothing Playing..."}</span>
+            {#if overflow}<span aria-hidden="true">{song.title}</span>{/if}
+          </span>
+        </button>
+        <button class="artist" onclick={close}>{song.artist || "No artist"}</button>
       </div>
     </div>
 
@@ -179,6 +190,31 @@
     overflow: hidden;
     background: var(--ground);
   }
+  .tinted {
+    color-scheme: dark;
+    color: var(--text);
+  }
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none; /* drags land on the window underneath */
+  }
+  .backdrop img {
+    position: absolute;
+    inset: -30%;
+    width: 160%;
+    height: 160%;
+    object-fit: cover;
+    filter: blur(24px) saturate(1.5) brightness(0.6);
+    animation: arrive 300ms ease-out;
+  }
+  .backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #0008; /* keeps muted text at 4.5:1 on a white cover */
+  }
   .cover {
     position: relative;
     display: grid;
@@ -206,6 +242,7 @@
     }
   }
   .panel {
+    position: relative;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -243,9 +280,36 @@
     font-size: var(--fs-small);
     color: var(--muted);
   }
-  .title:hover,
   .artist:hover {
     text-decoration: underline;
+  }
+  /* soft edge shows the title runs on; hovering holds it still to read */
+  .title.fade {
+    text-overflow: clip;
+    mask-image: linear-gradient(90deg, #000 88%, transparent);
+  }
+  .marquee {
+    display: inline-block;
+    width: max-content;
+  }
+  .marquee.scrolling {
+    animation: marquee 10s linear infinite;
+  }
+  /* inline spans report clientWidth 0, so the text width needs inline-block */
+  .marquee span {
+    display: inline-block;
+  }
+  /* margin, not padding: clientWidth leaves margin out of the overflow check */
+  .marquee.scrolling span {
+    margin-right: 3rem;
+  }
+  .title:hover .marquee {
+    animation-play-state: paused;
+  }
+  @keyframes marquee {
+    to {
+      transform: translateX(-50%);
+    }
   }
   .title:focus-visible,
   .artist:focus-visible {
@@ -510,7 +574,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .cover img {
+    .cover img,
+    .backdrop img,
+    .marquee.scrolling {
       animation: none;
     }
     .corner,

@@ -1,6 +1,10 @@
 // @ts-expect-error bun's built-in test module; run with `bun test src/lib` (no @types/bun installed)
 import { describe, expect, test } from "bun:test";
+<<<<<<< HEAD
 import { moveItem, nextStep, shuffleAfter, shuffleFrom, stepBack } from "./queue";
+=======
+import { backStep, moveItem, shuffleAfter, shuffleFrom, stepBack, stepUp } from "./queue";
+>>>>>>> feat/design
 
 test("moveItem keeps the playing track current", () => {
   const q = ["a", "b", "c", "d", "e"]; // "c" playing, at = 2
@@ -61,6 +65,7 @@ describe("stepBack", () => {
   });
 });
 
+<<<<<<< HEAD
 describe("nextStep", () => {
   test("repeat one replays only when the track ran out", () => {
     expect(nextStep(1, 3, "one", true, true)).toBe("same");
@@ -76,3 +81,29 @@ describe("nextStep", () => {
     expect(nextStep(0, 0, "one", false, true)).toBe(null);
   });
 });
+=======
+describe("backStep", () => {
+  test("a song clicked in a list goes up the list", () => {
+    expect(backStep(0, 0, 1, false)).toBe("list"); // x y z, played y
+  });
+  test("a click in a new list goes up that list, not to the old one", () => {
+    expect(backStep(3, 3, 1, false)).toBe("list");
+  });
+  test("what played since the list began comes first", () => {
+    expect(backStep(4, 3, 2, false)).toBe("history");
+  });
+  test("a queued song with nothing behind it goes to the list song it follows", () => {
+    expect(backStep(0, 0, 1, true)).toBe("current");
+  });
+  test("the top of a list goes on to older history, then stops", () => {
+    expect(backStep(3, 3, 0, false)).toBe("history");
+    expect(backStep(0, 0, 0, false)).toBe(null);
+  });
+});
+
+test("stepUp puts queued tracks back where they played", () => {
+  const list = { context: ["x", "y", "z"], at: 1, queue: ["a", "b", "new"] };
+  expect(stepUp(list, 2)).toEqual({ context: ["x", "y", "a", "b", "z"], at: 0, queue: ["new"] });
+  expect(stepUp(list, 0)).toEqual({ context: ["x", "y", "z"], at: 0, queue: ["a", "b", "new"] });
+});
+>>>>>>> feat/design
