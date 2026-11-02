@@ -1,10 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-<<<<<<< HEAD
-import { moveItem, nextStep, shuffleFrom, stepBack } from "$lib/queue";
-=======
-import { backStep, moveItem, shuffleFrom, stepBack, stepUp } from "$lib/queue";
->>>>>>> feat/design
+import { backStep, moveItem, nextStep, shuffleFrom, stepBack, stepUp } from "$lib/queue";
 
 type PlayState = "playing" | "paused" | "stopped";
 

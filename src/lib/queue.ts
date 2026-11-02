@@ -39,7 +39,6 @@ export function stepBack<T>(
   return { at: a, queue: q, fromQueue: path !== context[a] };
 }
 
-<<<<<<< HEAD
 export const fmt = (s: number) =>
   `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
@@ -49,7 +48,8 @@ export function nextStep(queued: number, left: number, repeat: "off" | "all" | "
   if (queued) return "queue";
   if (left) return "list";
   return repeat === "all" && hasList ? "wrap" : null;
-=======
+}
+
 // where previous goes: back through what played since the list was started, then up the list itself,
 // then anything older. `started` is how much history there was when the list began
 export function backStep(history: number, started: number, at: number, fromQueue: boolean) {
@@ -67,5 +67,4 @@ export function stepUp<T>({ context, at, queue }: { context: T[]; at: number; qu
     at: at - 1,
     queue: queue.slice(returned),
   };
->>>>>>> feat/design
 }
