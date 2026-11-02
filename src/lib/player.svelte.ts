@@ -35,7 +35,7 @@ function start(path: string) {
 
 // context before shuffling, restored when shuffle turns off; null once the user reorders it by hand
 let ordered: string[] | null = null;
-type Snapshot = { context: string[]; queue: string[]; ordered: string[] | null; shuffle: boolean };
+type Snapshot = { context: string[]; queue: string[]; ordered: string[] | null; shuffle: boolean; history?: string[] };
 let undo: Snapshot | null = null;
 
 // every change makes new arrays, so a snapshot never changes under us
@@ -187,10 +187,19 @@ export function clearQueue() {
   player.queue = [];
 }
 
+// clears Previous too: it walks this same history
+export function clearHistory() {
+  snapshot();
+  undo!.history = player.history;
+  player.history = [];
+  started = 0;
+}
+
 export function undoQueue() {
   if (!undo) return;
   returned = 0;
   const current = player.context[player.at];
+  if (undo.history) player.history = [...undo.history, ...player.history]; // anything played since stays newest
   ({ context: player.context, queue: player.queue, ordered, shuffle: player.shuffle } = undo);
   player.at = player.context.indexOf(current);
   dropUndo();

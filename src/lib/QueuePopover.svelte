@@ -11,6 +11,7 @@
     moveInQueue,
     moveInContext,
     clearQueue,
+    clearHistory,
     toggleShuffle,
     undoQueue,
   } from "$lib/player.svelte";
@@ -53,7 +54,7 @@
   <!-- opens scrolled to the current track: scroll up for history, down for what's next -->
   <div class="lists">
     {#if player.history.length}
-      <h3>Recently played</h3>
+      <h3 class="with-action">Recently played <button class="link" onclick={clearHistory}>Clear</button></h3>
       <ol>
         {#each player.history as path, k (k)}
           <li><button class="track past" onclick={() => replay(path)}><span class="cell">{title(path)}</span></button></li>
@@ -158,6 +159,11 @@
   .past {
     padding-left: 2rem;
     color: var(--faint);
+  }
+  .with-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
   }
   h3 {
     margin: 16px 12px 4px;
