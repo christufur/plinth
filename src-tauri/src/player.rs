@@ -6,7 +6,6 @@ pub enum Cmd {
     Play(String),
     Pause,
     Resume,
-    Stop,
     Seek(f64),
     Volume(f32),
 }
@@ -41,10 +40,6 @@ pub fn spawn(app: AppHandle) -> Sender<Cmd> {
                 Ok(Cmd::Resume) => {
                     player.play();
                     let _ = app.emit("state_changed", "playing");
-                }
-                Ok(Cmd::Stop) => {
-                    player.clear();
-                    let _ = app.emit("state_changed", "stopped");
                 }
                 Ok(Cmd::Seek(s)) => {
                     let max = if duration > 0.0 {

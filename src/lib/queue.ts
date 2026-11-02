@@ -39,6 +39,17 @@ export function stepBack<T>(
   return { at: a, queue: q, fromQueue: path !== context[a] };
 }
 
+export const fmt = (s: number) =>
+  `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+// what plays next; `ended` means the track ran out, so repeat one only applies there, not to the next button
+export function nextStep(queued: number, left: number, repeat: "off" | "all" | "one", ended: boolean, hasList: boolean) {
+  if (ended && repeat === "one") return "same";
+  if (queued) return "queue";
+  if (left) return "list";
+  return repeat === "all" && hasList ? "wrap" : null;
+}
+
 // where previous goes: back through what played since the list was started, then up the list itself,
 // then anything older. `started` is how much history there was when the list began
 export function backStep(history: number, started: number, at: number, fromQueue: boolean) {
