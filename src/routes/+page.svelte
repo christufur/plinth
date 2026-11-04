@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { ask } from "@tauri-apps/plugin-dialog";
   import MicVocal from "@lucide/svelte/icons/mic-vocal";
   import Disc3 from "@lucide/svelte/icons/disc-3";
@@ -11,17 +12,22 @@
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import Sun from "@lucide/svelte/icons/sun";
   import Moon from "@lucide/svelte/icons/moon";
-  import { player, play, toggle, seek, setVolume, next, prev, fmt } from "$lib/player.svelte";
+  import { player, play, toggle, seek, setVolume, next, prev, toggleMute, toggleShuffle, cycleRepeat, fmt } from "$lib/player.svelte";
   import { library, pick, artistOf, albumKey, group, matches, type Track } from "$lib/library.svelte";
   import { playlists, add, rename, remove, moveTrack, type Playlist } from "$lib/playlists.svelte";
+  import { syncPopout } from "$lib/popout.svelte";
   import { trackMenu } from "$lib/menu";
   import Download from "$lib/Download.svelte";
   import PlayerBar from "$lib/PlayerBar.svelte";
+  import NowPlaying from "$lib/NowPlaying.svelte";
   import TrackTable from "$lib/TrackTable.svelte";
 
+  syncPopout();
+
   let showURL = $state(false);
+  let nowPlaying = $state(false);
   let query = $state("");
-  let searchEl: HTMLInputElement;
+  let searchEl = $state<HTMLInputElement>();
 
   // light/dark switch; until the user picks one, the system setting decides.
   // app.css colors use light-dark(), which follows color-scheme on the root element
@@ -83,15 +89,18 @@
   let headTracks = $derived(pl ? plTracks : sel && !query ? visible : []);
 
   function go(v: View) {
+    nowPlaying = false;
     view = v;
     sel = null;
     query = "";
   }
   function drill(kind: "artists" | "albums", v: string) {
+    nowPlaying = false;
     sel = { kind, v };
     view = kind;
   }
   function openPlaylist(id: string, renameNow = false) {
+    nowPlaying = false;
     sel = { kind: "playlist", v: id };
     view = "playlists";
     query = "";
@@ -125,16 +134,28 @@
     ArrowRight: () => seek(player.pos + 5),
     ArrowUp: () => setVolume(Math.min(1, player.volume + 0.05)),
     ArrowDown: () => setVolume(Math.max(0, player.volume - 0.05)),
-    n: next,
+    n: () => next(),
     p: prev,
+    m: toggleMute,
+    s: toggleShuffle,
+    r: cycleRepeat,
   };
+  const openFromPlayer = (t: Track, kind: "albums" | "artists") => {
+    const key = kind === "albums" ? albumKey(t) : artistOf(t);
+    if (!key) return;
+    query = "";
+    drill(kind, key);
+  };
+
   function onkey(e: KeyboardEvent) {
+    if (e.key === "Escape") nowPlaying = false;
     if ((e.metaKey || e.ctrlKey) && e.key === "f") {
       e.preventDefault();
-      searchEl.focus();
+      nowPlaying = false;
+      tick().then(() => searchEl?.focus()); // Now Playing has no search box until it closes
       return;
     }
-    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement).tagName === "INPUT") return; // leave ⌘M, ⌘R and the like to the system
     const fn = keys[e.key];
     if (fn) {
       e.preventDefault();
@@ -145,7 +166,8 @@
 
 <svelte:window onkeydown={onkey} />
 
-<div class="app">
+<div class="app" class:full={nowPlaying}>
+  {#if !nowPlaying}
   <header class="top">
     <label class="search">
       <Search size={16} aria-hidden="true" />
@@ -159,7 +181,7 @@
           view = "tracks";
           sel = null;
         }}
-        onkeydown={(e) => e.key === "Escape" && ((query = ""), searchEl.blur())}
+        onkeydown={(e) => e.key === "Escape" && ((query = ""), searchEl?.blur())}
       />
       <kbd>⌘F</kbd>
     </label>
@@ -170,10 +192,11 @@
       </button>
     </div>
   </header>
+  {/if}
 
   <nav aria-label="Library">
     {#each nav as [v, label, Icon, n]}
-      <button class="nav lib" class:active={view === v && !pl} aria-current={view === v && !pl ? "page" : undefined} onclick={() => go(v)}>
+      <button class="nav lib" class:active={view === v && !pl && !nowPlaying} aria-current={view === v && !pl && !nowPlaying ? "page" : undefined} onclick={() => go(v)}>
         <Icon size={16} />
         <span>{label}</span>
         <span class="num count">{n}</span>
@@ -184,7 +207,7 @@
       <button class="icon small" onclick={newPlaylist} aria-label="New playlist"><Plus size={16} /></button>
     </div>
     {#each playlists.playlists as p (p.id)}
-      <button class="nav" class:active={pl?.id === p.id} aria-current={pl?.id === p.id ? "page" : undefined} onclick={() => openPlaylist(p.id)}>
+      <button class="nav" class:active={pl?.id === p.id && !nowPlaying} aria-current={pl?.id === p.id && !nowPlaying ? "page" : undefined} onclick={() => openPlaylist(p.id)}>
         <span class="cell">{p.name}</span>
       </button>
     {:else}
@@ -200,6 +223,9 @@
   </nav>
 
   <main>
+    {#if nowPlaying}
+      <NowPlaying onback={() => (nowPlaying = false)} onopen={openFromPlayer} />
+    {:else}
     <Download open={showURL} />
 
     {#if !library.folder}
@@ -348,10 +374,13 @@
         <p class="empty">No albums found. Tracks without an album tag only show under Tracks.</p>
       {/each}
     {/if}
+    {/if}
   </main>
 </div>
 
-<PlayerBar />
+{#if !nowPlaying}
+  <PlayerBar onopen={openFromPlayer} onnowplaying={() => (nowPlaying = true)} />
+{/if}
 
 <style>
   /* sidebar runs the full height; the toolbar and list share the column beside it */
@@ -360,6 +389,13 @@
     grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
     grid-template-rows: var(--top-h) minmax(0, 1fr);
     height: calc(100vh - var(--bar-h));
+  }
+  /* Now Playing has its own controls, so it takes the top bar's and player bar's room */
+  .app.full {
+    grid-template-rows: minmax(0, 1fr);
+    height: 100vh;
+    color-scheme: dark;
+    color: var(--text); /* inherited colour comes from body, which stays in the app's own scheme */
   }
   nav {
     grid-row: 1 / -1;
